@@ -187,7 +187,7 @@ public class DirDiffExplorer {
     private List<String> getWrappedText(String text, float maxWidth, PDType1Font font, float fontSize)
             throws IOException {
         List<String> lines = new ArrayList<>();
-        int lastSpace = -1;
+        // int lastSpace = -1;
         float spaceWidth = font.getStringWidth(" ") / 1000 * fontSize;
         String[] words = text.split(" ");
 
