@@ -175,7 +175,7 @@ public class DirDiffExplorer {
                 }
                
                 contentStream.newLine();
-                contentStream.showText("Total de arquivos modificados: " + differences.size());
+                contentStream.showText("Total de arquivos modificados: " + totalArquivosModificados);
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos excluídos: " + totalArquivosExcluidos);
                 contentStream.newLine();
