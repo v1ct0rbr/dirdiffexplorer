@@ -17,6 +17,7 @@ import java.util.List;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType0Font;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 import com.victorqueiroga.utils.MyDateUtils;
@@ -29,6 +30,11 @@ public class DirDiffExplorer {
     private Path destDir;
     private List<String> differences;
     private long totalFiles;
+    private long totalArquivosModificados = 0;
+    private long totalArquivosExcluidos = 0;
+    private long totalArquivosAdicionados = 0;
+    private long totalDiretoriosAdicionados = 0;
+    private long totalDiretoriosExcluidos = 0;
     private long processedFiles;
 
     public DirDiffExplorer(String sourceDir, String destDir) {
@@ -58,20 +64,22 @@ public class DirDiffExplorer {
                 Path destFile = destDir.resolve(relativePath);
 
                 if (!Files.exists(destFile)) {
-                    differences.add("Arquivo excluído: " + relativePath);
+                    differences.add("- Arquivo excluído: " + relativePath);
+                    totalArquivosExcluidos++;
                 } else {
                     long size = Files.size(file);
                     long sizeDest = Files.size(destFile);
                     FileTime lastModified = Files.getLastModifiedTime(file);
                     FileTime lastModifiedDest = Files.getLastModifiedTime(destFile);
-                    String diffInfoTemp = " | Tamanho Original: " + size + " - Tamanho Destino: " + sizeDest
-                            + " | Últ. Mod do Org.: " + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModified)
-                            + " - Últ. Mod do Dest.: "
-                            + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModifiedDest);
+                    String diffInfoTemp = " | Tamanho ( " + size + " -> " + sizeDest + " )"
+                            + " | Data de modificacao: (" + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModified)
+                            + " -> "
+                            + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModifiedDest) + ")";
 
-                    if (size != sizeDest) {
+                    if (size != sizeDest || lastModified.compareTo(lastModifiedDest) != 0){
                         differences.add(
-                                "Arquivo modificado: " + relativePath + diffInfoTemp);
+                                "* Arquivo modificado: " + relativePath + diffInfoTemp);
+                        totalArquivosModificados++;
                     }
 
                 }
@@ -87,7 +95,8 @@ public class DirDiffExplorer {
                 Path destDirPath = destDir.resolve(relativePath);
 
                 if (!Files.exists(destDirPath)) {
-                    differences.add("Diretório excluído: " + relativePath);
+                    differences.add("- Diretório excluído: " + relativePath);
+                    totalDiretoriosExcluidos++;
                 }
 
                 return FileVisitResult.CONTINUE;
@@ -101,7 +110,8 @@ public class DirDiffExplorer {
                 Path sourceFile = sourceDir.resolve(relativePath);
 
                 if (!Files.exists(sourceFile)) {
-                    differences.add("Arquivo adicionado: " + relativePath);
+                    differences.add("+ Arquivo adicionado: " + relativePath);
+                    totalArquivosAdicionados++;
                 }
 
                 return FileVisitResult.CONTINUE;
@@ -113,7 +123,8 @@ public class DirDiffExplorer {
                 Path sourceDirPath = sourceDir.resolve(relativePath);
 
                 if (!Files.exists(sourceDirPath)) {
-                    differences.add("Diretório adicionado: " + relativePath);
+                    differences.add("+ Diretório adicionado: " + relativePath);
+                    totalDiretoriosAdicionados++;
                 }
 
                 return FileVisitResult.CONTINUE;
@@ -133,6 +144,7 @@ public class DirDiffExplorer {
     }
 
     private void generatePDFReport() {
+        String userName = System.getProperty("user.name");
         String pdfFileName = "DifferencesReport_"
                 + MyDateUtils.formatLocalDateTime(LocalDateTime.now(), MyDateUtils.PATTERN_LOCALDATETIME) + ".pdf";
 
@@ -140,10 +152,12 @@ public class DirDiffExplorer {
             PDPage page = new PDPage();
             document.addPage(page);
 
+            PDType0Font font = PDType0Font.load(document, new File("resources/NotoSans-Regular.ttf"));
+           
             try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
 
                 contentStream.beginText();
-                contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12);
+                contentStream.setFont(font, 12);
                 contentStream.setLeading(14.5f);
                 contentStream.newLineAtOffset(25, 700);
 
@@ -151,14 +165,43 @@ public class DirDiffExplorer {
                         + MyDateUtils.formatLocalDateTime(LocalDateTime.now(),
                                 MyDateUtils.PATTERN_LOCALDATETIMEFORMAL));
                 contentStream.newLine();
+                contentStream.showText("Usuário: " + userName);
+                contentStream.newLine();
                 contentStream.newLine();
 
                 for (String difference : differences) {
                     addWrappedText(contentStream, difference, 550); // Adjust the width as per your page size
                     contentStream.newLine();
                 }
+               
+                contentStream.newLine();
+                contentStream.showText("Total de arquivos modificados: " + differences.size());
+                contentStream.newLine();
+                contentStream.showText("Total de arquivos excluídos: " + totalArquivosExcluidos);
+                contentStream.newLine();
+                contentStream.showText("Total de arquivos adicionados: " + totalArquivosAdicionados);
+                contentStream.newLine();
+                contentStream.showText("Total de diretórios adicionados: " + totalDiretoriosAdicionados);
+                contentStream.newLine();
+                contentStream.showText("Total de diretórios excluídos: " + totalDiretoriosExcluidos);
+                contentStream.newLine();
+                contentStream.showText("Total de arquivos processados: " + totalFiles);
+
+                
+
 
                 contentStream.endText();
+            }
+
+            // Create the REPORT_PATH directory if it doesn't exist
+            File reportDir = new File(REPORT_PATH);
+            if (!reportDir.exists()) {
+                if (reportDir.mkdirs()) {
+                    System.out.println("Diretório REPORT_PATH criado com sucesso.");
+                } else {
+                    System.err.println("Erro ao criar o diretório REPORT_PATH.");
+                    return;
+                }
             }
 
             document.save(REPORT_PATH + pdfFileName);
