@@ -9,6 +9,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,15 +19,17 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
+import com.victorqueiroga.utils.MyDateUtils;
+
 public class DirDiffExplorer {
+
+    private static final String REPORT_PATH = "relatorios/";
 
     private Path sourceDir;
     private Path destDir;
     private List<String> differences;
     private long totalFiles;
     private long processedFiles;
-
-    
 
     public DirDiffExplorer(String sourceDir, String destDir) {
         this.sourceDir = Paths.get(sourceDir);
@@ -55,8 +59,21 @@ public class DirDiffExplorer {
 
                 if (!Files.exists(destFile)) {
                     differences.add("Arquivo excluído: " + relativePath);
-                } else if (Files.size(file) != Files.size(destFile) || Files.getLastModifiedTime(file).compareTo(Files.getLastModifiedTime(destFile)) != 0) {
-                    differences.add("Arquivo excluído: " + relativePath);
+                } else {
+                    long size = Files.size(file);
+                    long sizeDest = Files.size(destFile);
+                    FileTime lastModified = Files.getLastModifiedTime(file);
+                    FileTime lastModifiedDest = Files.getLastModifiedTime(destFile);
+                    String diffInfoTemp = " | Tamanho Original: " + size + " - Tamanho Destino: " + sizeDest
+                            + " | Últ. Mod do Org.: " + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModified)
+                            + " - Últ. Mod do Dest.: "
+                            + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModifiedDest);
+
+                    if (size != sizeDest) {
+                        differences.add(
+                                "Arquivo modificado: " + relativePath + diffInfoTemp);
+                    }
+
                 }
 
                 processedFiles++;
@@ -116,37 +133,36 @@ public class DirDiffExplorer {
     }
 
     private void generatePDFReport() {
-        String pdfFileName = "DifferencesReport.pdf";
+        String pdfFileName = "DifferencesReport_"
+                + MyDateUtils.formatLocalDateTime(LocalDateTime.now(), MyDateUtils.PATTERN_LOCALDATETIME) + ".pdf";
 
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage();
             document.addPage(page);
 
             try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+
                 contentStream.beginText();
                 contentStream.setFont(PDType1Font.HELVETICA_BOLD, 12);
                 contentStream.setLeading(14.5f);
                 contentStream.newLineAtOffset(25, 700);
 
-                contentStream.showText("Relatório de Diferenças entre Diretórios");
+                contentStream.showText("Differences Report - Gerado em "
+                        + MyDateUtils.formatLocalDateTime(LocalDateTime.now(),
+                                MyDateUtils.PATTERN_LOCALDATETIMEFORMAL));
                 contentStream.newLine();
                 contentStream.newLine();
 
                 for (String difference : differences) {
-                    contentStream.showText(difference);
+                    addWrappedText(contentStream, difference, 550); // Adjust the width as per your page size
                     contentStream.newLine();
                 }
-                contentStream.newLine();
-                contentStream.newLine();
-                contentStream.showText("Total de arquivos processados: " + totalFiles);
-                contentStream.newLine();
-                contentStream.showText("Total de diferenças encontradas: " + differences.size());
 
                 contentStream.endText();
             }
 
-            document.save(pdfFileName);
-            System.out.println("Diferenças salvas em -> " + pdfFileName);
+            document.save(REPORT_PATH + pdfFileName);
+            System.out.println("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
 
             // Open the generated PDF file
             if (Desktop.isDesktopSupported()) {
@@ -158,6 +174,43 @@ public class DirDiffExplorer {
         } catch (IOException e) {
             System.err.println("Erro ao criar o relátorio: " + e.getMessage());
         }
+    }
+
+    private void addWrappedText(PDPageContentStream contentStream, String text, float maxWidth) throws IOException {
+        List<String> lines = getWrappedText(text, maxWidth, PDType1Font.HELVETICA_BOLD, 12);
+        for (String line : lines) {
+            contentStream.showText(line);
+            contentStream.newLine();
+        }
+    }
+
+    private List<String> getWrappedText(String text, float maxWidth, PDType1Font font, float fontSize)
+            throws IOException {
+        List<String> lines = new ArrayList<>();
+        int lastSpace = -1;
+        float spaceWidth = font.getStringWidth(" ") / 1000 * fontSize;
+        String[] words = text.split(" ");
+
+        StringBuilder currentLine = new StringBuilder();
+        float currentLineWidth = 0;
+
+        for (String word : words) {
+            float wordWidth = font.getStringWidth(word) / 1000 * fontSize;
+            if (currentLineWidth + wordWidth + spaceWidth > maxWidth) {
+                lines.add(currentLine.toString());
+                currentLine = new StringBuilder(word);
+                currentLineWidth = wordWidth;
+            } else {
+                if (currentLine.length() > 0) {
+                    currentLine.append(" ");
+                    currentLineWidth += spaceWidth;
+                }
+                currentLine.append(word);
+                currentLineWidth += wordWidth;
+            }
+        }
+        lines.add(currentLine.toString());
+        return lines;
     }
 
     public Path getSourceDir() {
@@ -200,5 +253,4 @@ public class DirDiffExplorer {
         this.processedFiles = processedFiles;
     }
 
-   
 }
