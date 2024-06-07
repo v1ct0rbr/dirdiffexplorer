@@ -22,7 +22,7 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
 import com.victorqueiroga.utils.MyDateUtils;
 
-public class DirDiffExplorer {
+public class DirComparator {
 
     private static final String REPORT_PATH = "relatorios/";
 
@@ -36,11 +36,13 @@ public class DirDiffExplorer {
     private long totalDiretoriosAdicionados = 0;
     private long totalDiretoriosExcluidos = 0;
     private long processedFiles;
+    private DirDiffExplorerUI ui;
 
-    public DirDiffExplorer(String sourceDir, String destDir) {
+    public DirComparator(String sourceDir, String destDir, DirDiffExplorerUI ui) {
         this.sourceDir = Paths.get(sourceDir);
         this.destDir = Paths.get(destDir);
         this.differences = new ArrayList<>();
+        this.ui = ui;
     }
 
     public void compareDirectories() throws IOException {
@@ -64,8 +66,11 @@ public class DirDiffExplorer {
                 Path destFile = destDir.resolve(relativePath);
 
                 if (!Files.exists(destFile)) {
-                    differences.add("- Arquivo excluído: " + relativePath);
+                    String difereString = "- Arquivo excluído: " + relativePath;
+                    differences.add(difereString);
+                    ui.updateResult(difereString);
                     totalArquivosExcluidos++;
+                    
                 } else {
                     long size = Files.size(file);
                     long sizeDest = Files.size(destFile);
@@ -76,9 +81,13 @@ public class DirDiffExplorer {
                             + " -> "
                             + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModifiedDest) + ")";
 
-                    if (size != sizeDest || lastModified.compareTo(lastModifiedDest) != 0){
-                        differences.add(
-                                "* Arquivo modificado: " + relativePath + diffInfoTemp);
+                    //Comparando se o arquivo foi modificado. Se os tamanhos forem diferentes ou a data de modificação for diferente por uma diferença de tempo > 5 segundos
+                    if (size != sizeDest || (Math.abs(lastModified.toMillis() - lastModifiedDest.toMillis()) > 5000 
+                    || (Math.abs(lastModifiedDest.toMillis() - lastModified.toMillis()) > 5000))){
+                        String difereString ="* Arquivo modificado: " + relativePath + diffInfoTemp;
+                        differences.add(difereString
+                                );
+                        ui.updateResult(difereString);
                         totalArquivosModificados++;
                     }
 
@@ -95,7 +104,9 @@ public class DirDiffExplorer {
                 Path destDirPath = destDir.resolve(relativePath);
 
                 if (!Files.exists(destDirPath)) {
-                    differences.add("- Diretório excluído: " + relativePath);
+                    String difereString = "- Diretório excluído: " + relativePath;
+                    differences.add(difereString);
+                    ui.updateResult(difereString);
                     totalDiretoriosExcluidos++;
                 }
 
@@ -110,7 +121,9 @@ public class DirDiffExplorer {
                 Path sourceFile = sourceDir.resolve(relativePath);
 
                 if (!Files.exists(sourceFile)) {
-                    differences.add("+ Arquivo adicionado: " + relativePath);
+                    String difereString = "+ Arquivo adicionado: " + relativePath;
+                    differences.add(difereString);
+                    ui.updateResult(difereString);
                     totalArquivosAdicionados++;
                 }
 
@@ -123,7 +136,9 @@ public class DirDiffExplorer {
                 Path sourceDirPath = sourceDir.resolve(relativePath);
 
                 if (!Files.exists(sourceDirPath)) {
-                    differences.add("+ Diretório adicionado: " + relativePath);
+                    String difereString = "+ Diretório adicionado: " + relativePath;
+                    differences.add(difereString);
+                    ui.updateResult(difereString);
                     totalDiretoriosAdicionados++;
                 }
 
@@ -140,7 +155,8 @@ public class DirDiffExplorer {
 
     private void printProgress() {
         double progress = (double) processedFiles / totalFiles * 100;
-        System.out.printf("Progress: %.2f%%%n", progress);
+        //System.out.printf("Progress: %.2f%%%n", progress);
+        ui.updateProgress(progress);
     }
 
     private void generatePDFReport() {
@@ -176,16 +192,22 @@ public class DirDiffExplorer {
                
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos modificados: " + totalArquivosModificados);
+                ui.updateResult("Total de arquivos modificados: " + totalArquivosModificados);
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos excluídos: " + totalArquivosExcluidos);
+                ui.updateResult("Total de arquivos excluídos: " + totalArquivosExcluidos);
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos adicionados: " + totalArquivosAdicionados);
+                ui.updateResult("Total de arquivos adicionados: " + totalArquivosAdicionados);
                 contentStream.newLine();
                 contentStream.showText("Total de diretórios adicionados: " + totalDiretoriosAdicionados);
+                ui.updateResult("Total de diretórios adicionados: " + totalDiretoriosAdicionados);
                 contentStream.newLine();
                 contentStream.showText("Total de diretórios excluídos: " + totalDiretoriosExcluidos);
+                ui.updateResult("Total de diretórios excluídos: " + totalDiretoriosExcluidos);
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos processados: " + totalFiles);
+                ui.updateResult("Total de arquivos processados: " + totalFiles);
 
                 
 
@@ -197,15 +219,18 @@ public class DirDiffExplorer {
             File reportDir = new File(REPORT_PATH);
             if (!reportDir.exists()) {
                 if (reportDir.mkdirs()) {
-                    System.out.println("Diretório REPORT_PATH criado com sucesso.");
+                    //System.out.println("Diretório REPORT_PATH criado com sucesso.");
+                    ui.updateResult("Diretório REPORT_PATH criado com sucesso.");
                 } else {
-                    System.err.println("Erro ao criar o diretório REPORT_PATH.");
+                    ui.showError("Erro ao criar o diretório REPORT_PATH.");
+                    //System.err.println("Erro ao criar o diretório REPORT_PATH.");
                     return;
                 }
             }
 
             document.save(REPORT_PATH + pdfFileName);
-            System.out.println("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
+            ui.updateResult("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
+            //System.out.println("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
 
             // Open the generated PDF file
             if (Desktop.isDesktopSupported()) {
@@ -215,7 +240,8 @@ public class DirDiffExplorer {
                 }
             }
         } catch (IOException e) {
-            System.err.println("Erro ao criar o relátorio: " + e.getMessage());
+            ui.showError("Erro ao criar o relatório: " + e.getMessage());
+            //System.err.println("Erro ao criar o relátorio: " + e.getMessage());
         }
     }
 
