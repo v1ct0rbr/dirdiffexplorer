@@ -1,6 +1,5 @@
 package com.victorqueiroga;
 
-import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
@@ -25,6 +24,7 @@ import com.victorqueiroga.utils.MyDateUtils;
 public class DirComparator {
 
     private static final String REPORT_PATH = "relatorios/";
+    private static final int MAX_ITENS_PER_PAGE = 16;
 
     private Path sourceDir;
     private Path destDir;
@@ -36,23 +36,46 @@ public class DirComparator {
     private long totalDiretoriosAdicionados = 0;
     private long totalDiretoriosExcluidos = 0;
     private long processedFiles;
-    private DirDiffExplorerUI ui;
+    private String filePath;
+    private final DirDiffJFrame ui;
+    private static DirComparator instance;
 
-    public DirComparator(String sourceDir, String destDir, DirDiffExplorerUI ui) {
+    public DirComparator(String sourceDir, String destDir, DirDiffJFrame ui) {
         this.sourceDir = Paths.get(sourceDir);
         this.destDir = Paths.get(destDir);
         this.differences = new ArrayList<>();
         this.ui = ui;
+        this.filePath = "";
     }
 
-    public void compareDirectories() throws IOException {
+    // public static DirComparator initialize(String sourceDir, String destDir,
+    // DirDiffJFrame ui) {
+    // if (instance == null) {
+    // instance = new DirComparator(sourceDir, destDir, ui);
+    // } else {
+    // this.differences = new ArrayList<>();
+    // instance.setDestDir(Paths.get(destDir));
+    // instance.setSourceDir(Paths.get(sourceDir));
+    // }
+    // return instance;
+    // }
+
+    public static DirComparator getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException("Singleton de comparacao não foi inicializado.");
+        }
+        return instance;
+    }
+
+    public boolean compareDirectories() throws IOException {
         if (!Files.exists(sourceDir)) {
-            System.err.println("Erro: Diretório de origem não existe.");
-            return;
+            ui.showError("Erro: Diretório de origem não existe.");
+            return false;
         }
         if (!Files.exists(destDir)) {
-            System.err.println("Error: Diretório de destino não existe.");
-            return;
+            ui.showError("Error: Diretório de destino não existe.");
+
+            return false;
         }
 
         // Counting total files in source directory for progress calculation
@@ -70,23 +93,24 @@ public class DirComparator {
                     differences.add(difereString);
                     ui.updateResult(difereString);
                     totalArquivosExcluidos++;
-                    
+
                 } else {
                     long size = Files.size(file);
                     long sizeDest = Files.size(destFile);
                     FileTime lastModified = Files.getLastModifiedTime(file);
                     FileTime lastModifiedDest = Files.getLastModifiedTime(destFile);
                     String diffInfoTemp = " | Tamanho ( " + size + " -> " + sizeDest + " )"
-                            + " | Data de modificacao: (" + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModified)
+                            + " | Data de modificacao: ("
+                            + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModified)
                             + " -> "
                             + MyDateUtils.convertFileTimeToLocalDateTimeString(lastModifiedDest) + ")";
 
-                    //Comparando se o arquivo foi modificado. Se os tamanhos forem diferentes ou a data de modificação for diferente por uma diferença de tempo > 5 segundos
-                    if (size != sizeDest || (Math.abs(lastModified.toMillis() - lastModifiedDest.toMillis()) > 5000 
-                    || (Math.abs(lastModifiedDest.toMillis() - lastModified.toMillis()) > 5000))){
-                        String difereString ="* Arquivo modificado: " + relativePath + diffInfoTemp;
-                        differences.add(difereString
-                                );
+                    // Comparando se o arquivo foi modificado. Se os tamanhos forem diferentes ou a
+                    // data de modificação for diferente por uma diferença de tempo > 5 segundos
+                    if (size != sizeDest || (Math.abs(lastModified.toMillis() - lastModifiedDest.toMillis()) > 5000
+                            || (Math.abs(lastModifiedDest.toMillis() - lastModified.toMillis()) > 5000))) {
+                        String difereString = "* Arquivo modificado: " + relativePath + diffInfoTemp;
+                        differences.add(difereString);
                         ui.updateResult(difereString);
                         totalArquivosModificados++;
                     }
@@ -146,7 +170,7 @@ public class DirComparator {
             }
         });
 
-        generatePDFReport();
+        return generatePDFReport();
     }
 
     private long countFiles(Path dir) throws IOException {
@@ -155,11 +179,11 @@ public class DirComparator {
 
     private void printProgress() {
         double progress = (double) processedFiles / totalFiles * 100;
-        //System.out.printf("Progress: %.2f%%%n", progress);
+        // System.out.printf("Progress: %.2f%%%n", progress);
         ui.updateProgress(progress);
     }
 
-    private void generatePDFReport() {
+    private boolean generatePDFReport() {
         String userName = System.getProperty("user.name");
         String pdfFileName = "DifferencesReport_"
                 + MyDateUtils.formatLocalDateTime(LocalDateTime.now(), MyDateUtils.PATTERN_LOCALDATETIME) + ".pdf";
@@ -168,10 +192,10 @@ public class DirComparator {
             PDPage page = new PDPage();
             document.addPage(page);
 
-            PDType0Font font = PDType0Font.load(document, new File("resources/NotoSans-Regular.ttf"));
-           
-            try (PDPageContentStream contentStream = new PDPageContentStream(document, page)) {
+            PDType0Font font = PDType0Font.load(document, new File("resources/fonts/NotoSans-Regular.ttf"));
 
+            try {
+                PDPageContentStream contentStream = new PDPageContentStream(document, page);
                 contentStream.beginText();
                 contentStream.setFont(font, 12);
                 contentStream.setLeading(14.5f);
@@ -183,13 +207,35 @@ public class DirComparator {
                 contentStream.newLine();
                 contentStream.showText("Usuário: " + userName);
                 contentStream.newLine();
+                contentStream.showText("Origem: " + sourceDir);
+                contentStream.newLine();
+                contentStream.showText("Destino: " + destDir);
+                contentStream.newLine();
                 contentStream.newLine();
 
+                long diferencesAddedPerPage = 0;
                 for (String difference : differences) {
+
+                    if (diferencesAddedPerPage > (MAX_ITENS_PER_PAGE - 1)) {
+                        contentStream.endText(); // Encerra o texto atual antes de fechar o fluxo
+                        contentStream.close();
+                        PDPage blankPage = new PDPage();
+                        document.addPage(blankPage);
+                        contentStream = new PDPageContentStream(document, blankPage);
+                        contentStream.beginText();
+                        contentStream.setFont(font, 12);
+                        contentStream.setLeading(14.5f);
+                        contentStream.newLineAtOffset(25, 700);
+
+                        diferencesAddedPerPage = 0;
+                        ui.clearResult();
+
+                    }
                     addWrappedText(contentStream, difference, 550); // Adjust the width as per your page size
                     contentStream.newLine();
+                    diferencesAddedPerPage++;
                 }
-               
+
                 contentStream.newLine();
                 contentStream.showText("Total de arquivos modificados: " + totalArquivosModificados);
                 ui.updateResult("Total de arquivos modificados: " + totalArquivosModificados);
@@ -209,39 +255,36 @@ public class DirComparator {
                 contentStream.showText("Total de arquivos processados: " + totalFiles);
                 ui.updateResult("Total de arquivos processados: " + totalFiles);
 
-                
-
-
                 contentStream.endText();
+                contentStream.close();
+            } catch (IOException e) {
+                ui.showError(e.getMessage());
             }
 
             // Create the REPORT_PATH directory if it doesn't exist
             File reportDir = new File(REPORT_PATH);
             if (!reportDir.exists()) {
                 if (reportDir.mkdirs()) {
-                    //System.out.println("Diretório REPORT_PATH criado com sucesso.");
+                    // System.out.println("Diretório REPORT_PATH criado com sucesso.");
                     ui.updateResult("Diretório REPORT_PATH criado com sucesso.");
                 } else {
                     ui.showError("Erro ao criar o diretório REPORT_PATH.");
-                    //System.err.println("Erro ao criar o diretório REPORT_PATH.");
-                    return;
+                    // System.err.println("Erro ao criar o diretório REPORT_PATH.");
+                    throw new IOException("Não há permissão para criar o diretório de relatórios.");
                 }
             }
+            filePath = REPORT_PATH + pdfFileName;
+            this.ui.setCurrentFile(filePath);
+            document.save(filePath);
 
-            document.save(REPORT_PATH + pdfFileName);
-            ui.updateResult("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
-            //System.out.println("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
+            ui.updateResult("Diferenças salvas em -> " + filePath);
+            // System.out.println("Diferenças salvas em -> " + REPORT_PATH + pdfFileName);
 
-            // Open the generated PDF file
-            if (Desktop.isDesktopSupported()) {
-                File pdfFile = new File(pdfFileName);
-                if (pdfFile.exists()) {
-                    Desktop.getDesktop().open(pdfFile);
-                }
-            }
+            return true;
         } catch (IOException e) {
             ui.showError("Erro ao criar o relatório: " + e.getMessage());
-            //System.err.println("Erro ao criar o relátorio: " + e.getMessage());
+            return false;
+            // System.err.println("Erro ao criar o relátorio: " + e.getMessage());
         }
     }
 
