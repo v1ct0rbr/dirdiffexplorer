@@ -1,7 +1,7 @@
-package main.java.com.victorqueiroga.utils;
-
+package com.victorqueiroga.utils;
 
 import java.awt.Component;
+
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 
@@ -15,15 +15,15 @@ import javax.swing.SwingUtilities;
  * @author victorqueiroga
  */
 public class MyMessageUtils {
-     public static void showError(String message, Component parent) {
+    public static void showError(String message, Component parent) {
         SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(parent, message, "Error", JOptionPane.ERROR_MESSAGE);
         });
-     }
-     
-     public static void showInformation(String message, Component parent){
-          SwingUtilities.invokeLater(() -> {
+    }
+
+    public static void showInformation(String message, Component parent) {
+        SwingUtilities.invokeLater(() -> {
             JOptionPane.showMessageDialog(parent, message, "Error", JOptionPane.INFORMATION_MESSAGE);
         });
-     }
+    }
 }

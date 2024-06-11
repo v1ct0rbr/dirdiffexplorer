@@ -80,24 +80,7 @@
                         </configuration>	
 
                     </execution>
-                    <execution>
-                        <id>copy-exec</id>
-                        <phase>process-resources</phase>
-                        <goals>
-                            <goal>copy-resources</goal>
-                        </goals>
-                        <configuration>
-							
-                            <!-- Define o diretório de saida para a raiz do diretório target -->
-                            <outputDirectory>${project.build.directory}</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>${project.basedir}/exec</directory>								
-                                </resource>
-                            </resources>							
-                        </configuration>	
-
-                    </execution>
+                   
                 </executions>
             </plugin>
         </plugins>
