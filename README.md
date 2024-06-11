@@ -16,6 +16,6 @@ O DT-MONEY é uma aplicação desenvolvida em Java para Desktop que compara dois
 - Flatlaf: biblioteca de aparência (Look and Feel) para interfaces gráficas de usuário (GUI) em Java, inspirada no Flat Design. Ela proporciona uma aparência moderna e plana para aplicativos Java Swing.
 ## Screenshots
 
-![App Screenshot](https://github.com/v1ct0rbr/dirdiffexplorer/blob/main/public/resources/screenshots/tela01.png?raw=true)
+![App Screenshot](https://github.com/v1ct0rbr/dirdiffexplorer/blob/main/resources/screenshots/tela01.png?raw=true)
 
 
